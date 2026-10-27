@@ -1,7 +1,7 @@
 {
   "name": "arbor-sdk-ts",
   "version": "0.1.0",
-  "description": "TypeScript SDK for the Arbor Education REST API (port of arbor-education/sis-sdk-php)",
+  "description": "Unofficial TypeScript SDK for the Arbor Education REST API (port of arbor-education/sis-sdk-php)",
   "keywords": [
     "arbor",
     "mis",
@@ -10,6 +10,7 @@
     "rest",
     "typescript"
   ],
+  "author": "Josh Epstein",
   "license": "Apache-2.0",
   "type": "module",
   "engines": {
@@ -37,13 +38,17 @@
     "README.md"
   ],
   "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "generate": "node scripts/generate-models.mjs",
     "example": "tsx",
-    "sandbox:check": "tsx examples/sandbox-check.ts"
+    "sandbox:check": "tsx examples/sandbox-check.ts",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",

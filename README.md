@@ -1,5 +1,7 @@
 # Arbor TypeScript SDK
 
+> **Unofficial.** This is a community port. Arbor Education doesn't make, maintain or support it. For the official SDK, see [sis-sdk-php](https://github.com/arbor-education/sis-sdk-php).
+
 A TypeScript port of the [Arbor Education PHP SDK](https://github.com/arbor-education/sis-sdk-php) for the Arbor REST API (`/rest-v2`).
 
 It has the same building blocks as the PHP SDK: a gateway for CRUD, queries, changelogs, bulk creation and uploads; a `Query` builder; and typed classes for all 910 Arbor resources (including the `UkDfe`, `UkIlr`, `UkJcq`, `Cymru` and `Cayman` modules).
