@@ -1,5 +1,5 @@
 {
-  "name": "@joshuaepstein/arbor-sdk-ts",
+  "name": "@joshepstein/arbor-sdk-ts",
   "version": "0.1.0",
   "description": "Unofficial TypeScript SDK for the Arbor Education REST API (port of arbor-education/sis-sdk-php)",
   "keywords": [
