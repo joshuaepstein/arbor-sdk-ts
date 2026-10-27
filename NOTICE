@@ -1,0 +1,10 @@
+Arbor TypeScript SDK
+
+This project is a TypeScript port of the Arbor Education PHP SDK
+(https://github.com/arbor-education/sis-sdk-php), licensed under the
+Apache License, Version 2.0.
+
+Changes from the original: the code was rewritten in TypeScript, the HTTP
+layer uses the Fetch API in place of PSR-7/17/18, all network operations
+are asynchronous, and the model classes in src/models are generated from
+the PHP model classes by scripts/generate-models.mjs.

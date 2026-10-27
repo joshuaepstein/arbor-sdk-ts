@@ -1,0 +1,55 @@
+{
+  "name": "arbor-sdk-ts",
+  "version": "0.1.0",
+  "description": "TypeScript SDK for the Arbor Education REST API (port of arbor-education/sis-sdk-php)",
+  "keywords": [
+    "arbor",
+    "mis",
+    "sis",
+    "sdk",
+    "rest",
+    "typescript"
+  ],
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "NOTICE",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "generate": "node scripts/generate-models.mjs",
+    "example": "tsx",
+    "sandbox:check": "tsx examples/sandbox-check.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "tsup": "^9.0.0",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.5"
+  }
+}
