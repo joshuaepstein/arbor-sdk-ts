@@ -1,5 +1,5 @@
 {
-  "name": "arbor-sdk-ts",
+  "name": "@joshuaepstein/arbor-sdk-ts",
   "version": "0.1.0",
   "description": "Unofficial TypeScript SDK for the Arbor Education REST API (port of arbor-education/sis-sdk-php)",
   "keywords": [
@@ -12,6 +12,14 @@
   ],
   "author": "Josh Epstein",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/joshuaepstein/arbor-sdk-ts.git"
+  },
+  "homepage": "https://github.com/joshuaepstein/arbor-sdk-ts#readme",
+  "bugs": {
+    "url": "https://github.com/joshuaepstein/arbor-sdk-ts/issues"
+  },
   "type": "module",
   "engines": {
     "node": ">=18"

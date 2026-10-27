@@ -13,7 +13,7 @@ It has the same building blocks as the PHP SDK: a gateway for CRUD, queries, cha
 ## Install
 
 ```sh
-npm install arbor-sdk-ts
+npm install @joshuaepstein/arbor-sdk-ts
 ```
 
 Get API credentials for a sandbox from the [Arbor Developers Portal](https://developers-portal.arbor.sc).
@@ -21,7 +21,7 @@ Get API credentials for a sandbox from the [Arbor Developers Portal](https://dev
 ## Quick start
 
 ```ts
-import { createClient, Student, Person, Query, ResourceType } from 'arbor-sdk-ts';
+import { createClient, Student, Person, Query, ResourceType } from '@joshuaepstein/arbor-sdk-ts';
 
 const api = createClient({
   baseUrl: 'https://api-sandbox2.uk.arbor.sc', // a trailing /rest-v2 is fine too
@@ -57,7 +57,7 @@ await api.delete(person);
 `createClient()` sets the gateway as the default for every model, which is what makes `Student.retrieve()`, `Model.query()` and `model.save()` work. Pass `setAsDefault: false` to opt out, or build the pieces yourself:
 
 ```ts
-import { HttpClient, RestGateway, ModelBase } from 'arbor-sdk-ts';
+import { HttpClient, RestGateway, ModelBase } from '@joshuaepstein/arbor-sdk-ts';
 
 const http = new HttpClient({ baseUrl, user, password, timeoutMs: 30_000 });
 const api = new RestGateway(http);
@@ -103,7 +103,7 @@ console.log(person?.getLegalFirstName());
 ## Errors
 
 ```ts
-import { ServerError, ResourceNotFoundError } from 'arbor-sdk-ts';
+import { ServerError, ResourceNotFoundError } from '@joshuaepstein/arbor-sdk-ts';
 
 try {
   await api.bulkCreate(ResourceType.PERSON, people);
@@ -139,7 +139,7 @@ By default, models carrying user tags are checked first so records aren't create
 
 ```ts
 import { readFile } from 'node:fs/promises';
-import { UploadFile } from 'arbor-sdk-ts';
+import { UploadFile } from '@joshuaepstein/arbor-sdk-ts';
 
 await api.upload('/rest-v2/documents/upload',
   new UploadFile('file', await readFile('report.pdf'), 'report.pdf', { 'Content-Type': 'application/pdf' }));
@@ -150,7 +150,7 @@ await api.upload('/rest-v2/documents/upload',
 ### Attendance and assessment services
 
 ```ts
-import { AttendanceRegistration, AttendanceMark } from 'arbor-sdk-ts';
+import { AttendanceRegistration, AttendanceMark } from '@joshuaepstein/arbor-sdk-ts';
 
 const svc = new AttendanceRegistration(api);
 svc.awardAttendanceMark(student, sessionStart, await AttendanceMark.retrieve('LATE'), 16, 'Missed the bus');
