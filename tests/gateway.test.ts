@@ -17,6 +17,7 @@ import {
   Student,
   UploadFile,
   createClient,
+  RestGateway,
 } from '../src/index.js';
 import { mockFetch, setup } from './helpers.js';
 
@@ -69,6 +70,18 @@ describe('HttpClient', () => {
     expect(err.status).toBe(401);
     expect(err.message).toContain('Authentication failed');
     expect(err.message).toContain('Authentication required.');
+  });
+
+  it('reads { success, message } and { status: { errors } } error shapes', async () => {
+    const { fetch } = mockFetch(
+      { status: 401, json: { success: false, message: 'User is not allowed to access mvc:default/rest-v2/students' } },
+      { status: 400, json: { status: { success: false, code: 400, reason: 'Validation failed', errors: ['Unknown properties supplied'] } } },
+    );
+    const http = new HttpClient({ baseUrl: 'https://x.test', fetch });
+    const a = (await http.sendRequest('GET', '/rest-v2/a').catch((e) => e)) as ServerError;
+    expect(a.status).toBe(401);
+    expect(a.message).toBe('User is not allowed to access mvc:default/rest-v2/students');
+    await expect(http.sendRequest('GET', '/rest-v2/a')).rejects.toThrow('Validation failed: Unknown properties supplied');
   });
 
   it('uses the API-reported code over the HTTP status', async () => {
@@ -279,6 +292,44 @@ describe('RestGateway', () => {
     expect(http.getApplicationId()).toBe('my-app');
     await api.query(new Query('Student'));
     expect(calls[0]!.headers['x-mis-application-id']).toBe('my-app');
+  });
+});
+
+describe('profile pictures', () => {
+  const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0x10, 0x4a, 0x46]);
+
+  it('downloads and detects a JPEG served as octet-stream', async () => {
+    const calls: string[] = [];
+    const http = new HttpClient({
+      baseUrl: 'https://x.test',
+      fetch: async (url) => {
+        calls.push(url);
+        return new Response(jpeg, { status: 200, headers: { 'Content-Type': 'application/octet-stream' } });
+      },
+    });
+    const api = new RestGateway(http);
+    const s = new Student();
+    s.setResourceUrl('/rest-v2/students/1');
+    const pic = await api.getProfilePicture(s);
+    expect(calls[0]).toBe('https://x.test/rest-v2/profile-picture/student/1');
+    expect(pic?.contentType).toBe('image/jpeg');
+    expect(pic?.extension).toBe('jpg');
+    expect(pic?.data).toEqual(jpeg);
+  });
+
+  it('returns null when there is no picture, and throws on errors', async () => {
+    const replies = [new Response(null, { status: 404 }), new Response('{"success":false}', { status: 200 }), new Response('nope', { status: 401 })];
+    const http = new HttpClient({ baseUrl: 'https://x.test', fetch: async () => replies.shift()! });
+    const api = new RestGateway(http);
+    expect(await api.getProfilePicture('staff', 1)).toBeNull();
+    expect(await api.getProfilePicture('staff', 1)).toBeNull();
+    await expect(api.getProfilePicture('staff', 1)).rejects.toThrow('HTTP 401: nope');
+    await expect(api.getProfilePicture(new Person())).rejects.toThrow('only available for Student and Staff');
+  });
+
+  it('resolves a content tag target', async () => {
+    const { api } = setup({ json: { contentTag: { entityType: 'ContentTag', tagged: { entityType: 'Student', id: 1 } } } });
+    expect(await api.getContentTagTarget(3)).toEqual({ entityType: 'Student', id: 4987 });
   });
 });
 

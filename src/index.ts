@@ -1,6 +1,6 @@
 export { createClient, type CreateClientOptions } from './client.js';
 
-export { RestGateway, looselyEqual, type Gateway, type PropertyFilterMap, type RestGatewayOptions } from './api/gateway.js';
+export { RestGateway, detectImageType, looselyEqual, type Gateway, type ProfilePicture, type ProfilePictureOwner, type PropertyFilterMap, type RestGatewayOptions } from './api/gateway.js';
 export {
   HttpClient,
   HttpMethod,

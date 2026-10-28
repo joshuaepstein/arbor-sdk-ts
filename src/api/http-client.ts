@@ -42,6 +42,7 @@ export interface HttpClientInterface {
   setApplicationId(applicationId: string | null): void;
   sendRequest(method: HttpMethod, url: string, options?: RequestOptions): Promise<ApiResponse>;
   uploadRequest(url: string, file: UploadFile, options?: RequestOptions): Promise<ApiResponse>;
+  fetchRaw(url: string, options?: RequestOptions & { method?: HttpMethod }): Promise<Response>;
 }
 
 const VALID_STATUSES = new Set([200, 201, 204, 422]);
@@ -154,6 +155,17 @@ export class HttpClient implements HttpClientInterface {
     );
   }
 
+  /**
+   * Sends an authenticated request and returns the raw `Response` without
+   * parsing or error mapping. Use it for binary downloads (files, images).
+   */
+  fetchRaw(url: string, options: RequestOptions & { method?: HttpMethod } = {}): Promise<Response> {
+    const headers = this.buildHeaders({ ...options, headers: { Accept: '*/*', ...options.headers } });
+    let signal = options.signal;
+    if (this.timeoutMs !== undefined) signal ??= AbortSignal.timeout(this.timeoutMs);
+    return this.fetchFn(this.buildUrl(url, options.query), { method: options.method ?? HttpMethod.GET, headers, signal });
+  }
+
   protected buildUrl(url: string, query?: QueryParams): string {
     let full = /^https?:\/\//i.test(url) ? url : `${this.baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
     if (query) {
@@ -222,16 +234,22 @@ export class HttpClient implements HttpClientInterface {
       );
     }
 
-    const meta = payload?.response;
+    // Arbor uses several error shapes: { response: {code, reason, errors} },
+    // { status: {code, reason, errors} } and { success: false, message }.
+    const isObj = (v: unknown): v is Record<string, any> => typeof v === 'object' && v !== null && !Array.isArray(v);
+    const meta = isObj(payload?.response) ? payload.response : isObj(payload?.status) ? payload.status : undefined;
     if (meta && meta.code !== undefined && meta.code !== null) code = Number(meta.code);
 
-    let message: string = meta?.reason ?? 'API Error';
+    let message: string = meta?.reason ?? (typeof payload?.message === 'string' ? payload.message : 'API Error');
     let serverExceptionClass: string | null = null;
     let serverExceptionMessage: string | null = null;
     let serverExceptionTrace: string | null = null;
 
-    const firstError = Array.isArray(meta?.errors) ? meta.errors[0] : undefined;
-    if (firstError) {
+    const errors: unknown[] = Array.isArray(meta?.errors) ? meta.errors : [];
+    const firstError = errors[0];
+    const textErrors = errors.filter((e): e is string => typeof e === 'string');
+    if (textErrors.length) message = `${message}: ${textErrors.join('; ')}`;
+    if (isObj(firstError)) {
       serverExceptionClass = firstError.exception ?? null;
       serverExceptionMessage = firstError.message ?? null;
       serverExceptionTrace = firstError.trace ?? null;

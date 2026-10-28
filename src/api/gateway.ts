@@ -25,6 +25,27 @@ export interface Gateway {
   getApplicationId(): string | null;
 }
 
+/** A downloaded profile picture. */
+export interface ProfilePicture {
+  data: Uint8Array;
+  /** Detected from the file itself, since Arbor sends `application/octet-stream`. */
+  contentType: string;
+  /** File extension to use when saving, e.g. `jpg`. */
+  extension: string;
+}
+
+export type ProfilePictureOwner = 'student' | 'staff';
+
+/** Identifies an image from its first bytes. */
+export function detectImageType(data: Uint8Array): { contentType: string; extension: string } {
+  const hex = Array.from(data.subarray(0, 12), (b) => b.toString(16).padStart(2, '0')).join('');
+  if (hex.startsWith('ffd8ff')) return { contentType: 'image/jpeg', extension: 'jpg' };
+  if (hex.startsWith('89504e47')) return { contentType: 'image/png', extension: 'png' };
+  if (hex.startsWith('47494638')) return { contentType: 'image/gif', extension: 'gif' };
+  if (hex.startsWith('52494646') && hex.slice(16, 24) === '57454250') return { contentType: 'image/webp', extension: 'webp' };
+  return { contentType: 'application/octet-stream', extension: 'bin' };
+}
+
 /** `{ property: value }` or `{ property: [operator, value] }`. */
 export type PropertyFilterMap = Record<string, Exclude<FilterValue, readonly unknown[]> | [string, FilterValue]>;
 
@@ -222,6 +243,67 @@ export class RestGateway implements Gateway {
     const url = model.getResourceUrl();
     if (!url) throw new QueryError('Cannot delete a model without a resource URL');
     return this.httpClient.sendRequest(HttpMethod.DELETE, url);
+  }
+
+  /**
+   * Downloads a student's or staff member's current profile picture from
+   * `/rest-v2/profile-picture/{student|staff}/{id}`. Returns `null` if they have none.
+   *
+   * Needs the `content` and `contentTag` API permissions. Download and store
+   * the image yourself: the photo URLs GraphQL returns expire after a while.
+   *
+   * ```ts
+   * const pic = await api.getProfilePicture(student);          // a Student or Staff model
+   * const pic = await api.getProfilePicture('student', 4987);  // or a type and id
+   * ```
+   */
+  async getProfilePicture(owner: ModelBase | ProfilePictureOwner, id?: string | number): Promise<ProfilePicture | null> {
+    let kind: ProfilePictureOwner;
+    let ownerId: string | number | null;
+    if (typeof owner === 'string') {
+      kind = owner;
+      ownerId = id ?? null;
+    } else {
+      const type = owner.getResourceType();
+      if (type !== 'Student' && type !== 'Staff') {
+        throw new GatewayError(`Profile pictures are only available for Student and Staff, not ${type}`);
+      }
+      kind = type === 'Student' ? 'student' : 'staff';
+      ownerId = owner.getResourceId();
+    }
+    if (ownerId === null || ownerId === '') throw new GatewayError('getProfilePicture needs an id (or a saved model)');
+
+    const url = `/rest-v2/profile-picture/${kind}/${ownerId}`;
+    const res = await this.httpClient.fetchRaw(url);
+    if (res.status === 404 || res.status === 204) return null;
+    const data = new Uint8Array(await res.arrayBuffer());
+    if (!res.ok) {
+      const text = new TextDecoder().decode(data).replace(/\s+/g, ' ').trim().slice(0, 200);
+      throw new ServerError(`Profile picture request failed with HTTP ${res.status}${text ? `: ${text}` : ''}`, {
+        status: res.status,
+        responsePayload: text || null,
+      });
+    }
+    if (data.length === 0) return null;
+
+    const detected = detectImageType(data);
+    if (detected.extension === 'bin') {
+      // Not an image: most likely a JSON "no picture" response.
+      const text = new TextDecoder().decode(data.subarray(0, 300));
+      if (text.trimStart().startsWith('{')) return null;
+    }
+    return { data, ...detected };
+  }
+
+  /**
+   * Reads a content tag and returns what it's attached to, e.g.
+   * `{ entityType: 'Student', id: 4987 }`. Pass the result to {@link getProfilePicture}.
+   */
+  async getContentTagTarget(contentTagId: string | number): Promise<{ entityType: string; id: number | string } | null> {
+    const response = await this.httpClient.sendRequest(HttpMethod.GET, this.buildUrl('content-tags', contentTagId));
+    const tagged = response.contentTag?.tagged;
+    if (!tagged || !tagged.entityType || tagged.id === undefined) return null;
+    return { entityType: tagged.entityType, id: tagged.id };
   }
 
   /** Uploads a file as `multipart/form-data`. */
