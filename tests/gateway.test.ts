@@ -329,7 +329,7 @@ describe('profile pictures', () => {
 
   it('resolves a content tag target', async () => {
     const { api } = setup({ json: { contentTag: { entityType: 'ContentTag', tagged: { entityType: 'Student', id: 1 } } } });
-    expect(await api.getContentTagTarget(3)).toEqual({ entityType: 'Student', id: 4987 });
+    expect(await api.getContentTagTarget(3)).toEqual({ entityType: 'Student', id: 1 });
   });
 });
 
