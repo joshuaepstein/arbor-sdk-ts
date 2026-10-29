@@ -7,7 +7,7 @@ import type { ModelBase } from '../model/model-base.js';
 import { instantiateModel } from '../model/registry.js';
 import { registerGeneratedModels } from '../models/registry.generated.js';
 import { TimetableService, type Lesson, type TimetableRange } from '../service/timetable.js';
-import { StudentService, type ContactDetails, type GuardianInfo } from '../service/students.js';
+import { StudentService, type ContactDetails, type ContactOptions, type ContactPart, type GuardianInfo } from '../service/students.js';
 import type { AcademicLevel } from '../models/AcademicLevel.js';
 import type { RegistrationForm } from '../models/RegistrationForm.js';
 import { Query, type FilterValue } from '../query/query.js';
@@ -409,13 +409,24 @@ export class RestGateway implements Gateway {
     return new StudentService(this).currentForm(student, at);
   }
 
-  /** Emails, phone numbers and current addresses for a Student or Guardian (a model, or a student id / URL). */
-  getContactDetails(owner: ModelBase | string | number): Promise<ContactDetails> {
-    return new StudentService(this).contactDetails(owner);
+  /**
+   * Emails, phone numbers and current addresses for a Student or Guardian
+   * (a model, or a student id / URL). Use `{ include: ['emails'] }` to fetch only some parts.
+   */
+  getContactDetails(owner: ModelBase | string | number, options?: ContactOptions): Promise<ContactDetails> {
+    return new StudentService(this).contactDetails(owner, options);
   }
 
-  /** A student's guardians, primary ones first; `{ contacts: true }` includes their contact details. */
-  getGuardians(student: ModelBase | string | number, options?: { contacts?: boolean }): Promise<GuardianInfo[]> {
+  /** Just the email addresses of a Student or Guardian, e.g. `['a@school.org']`. */
+  getEmails(owner: ModelBase | string | number): Promise<string[]> {
+    return new StudentService(this).emails(owner);
+  }
+
+  /**
+   * A student's guardians, primary ones first. `{ contacts: true }` includes
+   * their contact details; `{ contacts: ['emails'] }` fetches just their emails.
+   */
+  getGuardians(student: ModelBase | string | number, options?: { contacts?: boolean | ContactPart[] }): Promise<GuardianInfo[]> {
     return new StudentService(this).guardians(student, options);
   }
 

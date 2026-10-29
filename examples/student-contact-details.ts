@@ -1,5 +1,5 @@
 /**
- * A student's year group, form, contact details and guardians. Read-only.
+ * A student's year group, form, email addresses and guardians. Read-only.
  *
  *   npx tsx examples/student-contact-details.ts <studentId>
  *
@@ -27,8 +27,9 @@ function printContacts(c: ContactDetails, indent: string): void {
 const [yearGroup, form, contacts, guardians] = await Promise.all([
   api.getYearGroup(studentId),
   api.getCurrentForm(studentId),
-  api.getContactDetails(studentId),
-  api.getGuardians(studentId, { contacts: true }),
+  // Emails only. Add 'phones' / 'addresses' to `include` if your app can read them.
+  api.getContactDetails(studentId, { include: ['emails'] }),
+  api.getGuardians(studentId, { contacts: ['emails'] }),
 ]);
 
 console.log(`Student ${studentId}: ${yearGroup?.getAcademicLevelName() ?? 'no year group'}, form ${form?.getRegistrationFormName() ?? '-'}`);

@@ -229,13 +229,15 @@ for (const l of lessons) {
 (await api.getYearGroup(4987))?.getAcademicLevelName();          // "Year 12"
 (await api.getCurrentForm(4987))?.getRegistrationFormName();     // "12BV"
 
-const c = await api.getContactDetails(4987);   // a Student or Guardian (model, id or URL)
+await api.getEmails(4987);                     // ['…@school.org']: a Student or Guardian (model, id or URL)
+
+const c = await api.getContactDetails(4987);   // all parts; or { include: ['emails'] } to fetch only some
 c.emails;      // [{ address, type, model }]
 c.phones;      // [{ number, extension, type, model }]
 c.addresses;   // current only: [{ lines, postcode, type, isCorrespondenceAddress, model }]
 c.unavailable; // parts the app can't read, e.g. [{ part: 'phones', reason: 'Forbidden: …' }]
 
-const guardians = await api.getGuardians(4987, { contacts: true }); // primary guardians first
+const guardians = await api.getGuardians(4987, { contacts: ['emails'] }); // primary first; `true` for all parts
 guardians[0].name;           // from the guardian's Person, or null if the app can't read Person
 guardians[0].relationship;   // "Mother"; also relationshipName and relationshipCode
 guardians[0].contacts;       // ContactDetails, with { contacts: true }

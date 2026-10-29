@@ -35,6 +35,15 @@ export interface ContactDetails {
   }[];
 }
 
+export type ContactPart = 'emails' | 'phones' | 'addresses';
+
+export interface ContactOptions {
+  /** Which parts to fetch. Default: all three. Parts not asked for come back empty and aren't requested. */
+  include?: ContactPart[];
+  /** Addresses current at this moment. Default: now. */
+  at?: Date;
+}
+
 export interface GuardianInfo {
   guardian: Guardian;
   person: Person | null;
@@ -48,7 +57,7 @@ export interface GuardianInfo {
   relationshipCode: string | null;
   isPrimary: boolean;
   isLegal: boolean;
-  /** Only filled in with `{ contacts: true }`. */
+  /** Only filled in with `{ contacts: true }` or `{ contacts: ['emails'] }`. */
   contacts?: ContactDetails;
   model: StudentGuardianRelationship;
 }
@@ -100,17 +109,19 @@ export class StudentService {
    * student or guardian. Contact details belong to the Student / Guardian
    * record, not their Person.
    */
-  async contactDetails(owner: Owner, at = new Date()): Promise<ContactDetails> {
+  async contactDetails(owner: Owner, options: ContactOptions = {}): Promise<ContactDetails> {
     const href = this.href(owner);
+    const at = options.at ?? new Date();
+    const want = new Set<ContactPart>(options.include ?? ['emails', 'phones', 'addresses']);
     const unavailable: ContactDetails['unavailable'] = [];
     const [emails, phones, addresses] = await Promise.all([
-      permitted('emails', unavailable, [] as EmailAddress[], () =>
+      !want.has('emails') ? ([] as EmailAddress[]) : permitted('emails', unavailable, [] as EmailAddress[], () =>
         this.api.query<EmailAddress>(new Query(EmailAddress.RESOURCE_TYPE).addPropertyFilter(EmailAddress.EMAIL_ADDRESS_OWNER, Query.OPERATOR_EQUALS, href), { load: true }),
       ),
-      permitted('phones', unavailable, [] as TelephoneNumber[], () =>
+      !want.has('phones') ? ([] as TelephoneNumber[]) : permitted('phones', unavailable, [] as TelephoneNumber[], () =>
         this.api.query<TelephoneNumber>(new Query(TelephoneNumber.RESOURCE_TYPE).addPropertyFilter(TelephoneNumber.NUMBER_OWNER, Query.OPERATOR_EQUALS, href), { load: true }),
       ),
-      permitted('addresses', unavailable, [] as { occupancy: PostalAddressOccupancy; address: PostalAddress | null }[], async () => {
+      !want.has('addresses') ? ([] as { occupancy: PostalAddressOccupancy; address: PostalAddress | null }[]) : permitted('addresses', unavailable, [] as { occupancy: PostalAddressOccupancy; address: PostalAddress | null }[], async () => {
         const occupancies = await this.api.query<PostalAddressOccupancy>(
           new Query(PostalAddressOccupancy.RESOURCE_TYPE).addPropertyFilter(PostalAddressOccupancy.OCCUPANT, Query.OPERATOR_EQUALS, href),
           { current: { at }, load: true },
@@ -148,7 +159,14 @@ export class StudentService {
   }
 
   /** The student's guardians, primary ones first. `{ contacts: true }` also fetches each guardian's contact details. */
-  async guardians(student: Owner, options: { contacts?: boolean } = {}): Promise<GuardianInfo[]> {
+  /** Just the email addresses of a student or guardian, e.g. `['a@school.org']`. One list request plus one per address. */
+  async emails(owner: Owner): Promise<string[]> {
+    const c = await this.contactDetails(owner, { include: ['emails'] });
+    if (c.unavailable.length) throw new ServerError(c.unavailable[0]!.reason, { status: 403 });
+    return c.emails.map((e) => e.address);
+  }
+
+  async guardians(student: Owner, options: { contacts?: boolean | ContactPart[] } = {}): Promise<GuardianInfo[]> {
     const relationships = await this.api.query<StudentGuardianRelationship>(
       new Query(StudentGuardianRelationship.RESOURCE_TYPE).addPropertyFilter(StudentGuardianRelationship.STUDENT, Query.OPERATOR_EQUALS, this.href(student)),
       { load: true },
@@ -174,7 +192,9 @@ export class StudentService {
           relationshipCode: relType?.getCode() || null,
           isPrimary: rel.getIsPrimaryGuardian() === true,
           isLegal: rel.getIsLegalGuardian() === true,
-          contacts: options.contacts ? await this.contactDetails(guardian) : undefined,
+          contacts: options.contacts
+            ? await this.contactDetails(guardian, { include: options.contacts === true ? undefined : options.contacts })
+            : undefined,
           model: rel,
         };
       }),

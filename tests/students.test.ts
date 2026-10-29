@@ -72,6 +72,24 @@ describe('student lookups', () => {
     expect(c.unavailable.map((u) => u.part)).toEqual(['addresses', 'phones']);
   });
 
+  it('include: only requests the parts asked for', async () => {
+    const urls: string[] = [];
+    const base = fakeArbor();
+    const http = base.getHttpClient() as HttpClient;
+    const orig = (http as any).fetchFn;
+    (http as any).fetchFn = (url: string, init: RequestInit) => (urls.push(url), orig(url, init));
+    const c = await base.getContactDetails(4987, { include: ['emails'] });
+    expect(c.emails).toHaveLength(1);
+    expect(c.phones).toEqual([]);
+    expect(c.unavailable).toEqual([]);
+    expect(urls.some((u) => u.includes('TelephoneNumbers') || u.includes('PostalAddress'))).toBe(false);
+  });
+
+  it('getEmails returns plain addresses, and throws if emails are forbidden', async () => {
+    expect(await fakeArbor().getEmails(4987)).toEqual(['student@school.test']);
+    await expect(fakeArbor(['EmailAddresses']).getEmails(4987)).rejects.toMatchObject({ status: 403 });
+  });
+
   it('contact details: errors other than 403 still throw', async () => {
     const http = new HttpClient({ baseUrl: 'https://x.test', maxRequestsPerSecond: Infinity, maxRetries: 0, fetch: async () => new Response('boom', { status: 500 }) });
     await expect(new RestGateway(http).getContactDetails(4987)).rejects.toBeInstanceOf(ServerError);
@@ -79,7 +97,7 @@ describe('student lookups', () => {
 
   it('guardians: reloads stub persons, labels relationships, primary first', async () => {
     const api = fakeArbor();
-    const g = await api.getGuardians(4987, { contacts: true });
+    const g = await api.getGuardians(4987, { contacts: ['emails'] });
     expect(g.map((x) => [x.name, x.relationship, x.relationshipCode, x.isPrimary])).toEqual([
       ['Jennifer Robertson', 'Mother', 'FAMN', true],
       [null, 'Relative', 'RELA', false], // Person not readable → name null, no crash
