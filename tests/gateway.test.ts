@@ -419,6 +419,49 @@ describe('RestGateway', () => {
   });
 });
 
+describe('query options', () => {
+  it('current: merges "ends after now" with "no end date", without duplicates', async () => {
+    const { api, calls } = setup(
+      { json: { timetableSlotStaffs: [{ entityType: 'TimetableSlotStaff', href: '/rest-v2/timetable-slot-staffs/1' }, { entityType: 'TimetableSlotStaff', href: '/rest-v2/timetable-slot-staffs/2' }] } },
+      { json: { timetableSlotStaffs: [{ entityType: 'TimetableSlotStaff', href: '/rest-v2/timetable-slot-staffs/2' }, { entityType: 'TimetableSlotStaff', href: '/rest-v2/timetable-slot-staffs/3' }] } },
+    );
+    const q = new Query('TimetableSlotStaff').addPropertyFilter('staff', 'equals', '/rest-v2/staff/9');
+    const res = await api.query(q, { current: { at: new Date(2026, 9, 29) } });
+    expect(res.map((m) => m.getResourceId())).toEqual(['1', '2', '3']);
+    expect(decodeURIComponent(calls[0]!.url)).toContain('filters.staff.equals=/rest-v2/staff/9&filters.endDate.after=2026-10-29 00:00:00');
+    expect(decodeURIComponent(calls[1]!.url)).toContain('filters.endDate.equals=NULL');
+    expect(q.getPropertyFilters()).toHaveLength(1); // the caller's query is untouched
+  });
+
+  it('current: supports a different end property', async () => {
+    const { api, calls } = setup({ json: {} }, { json: {} });
+    await api.query(new Query('X'), { current: { endProperty: 'endDatetime' } });
+    expect(calls.map((c) => decodeURIComponent(c.url))).toEqual([
+      expect.stringContaining('filters.endDatetime.after='),
+      expect.stringContaining('filters.endDatetime.equals=NULL'),
+    ]);
+  });
+
+  it('load: fills in each result', async () => {
+    const { api, calls } = setup(
+      { json: { rooms: [{ entityType: 'Room', href: '/rest-v2/rooms/1' }, { entityType: 'Room', href: '/rest-v2/rooms/2' }] } },
+      (call) => ({ json: { room: { entityType: 'Room', href: new URL(call.url).pathname, roomName: `R${new URL(call.url).pathname.slice(-1)}` } } }),
+      (call) => ({ json: { room: { entityType: 'Room', href: new URL(call.url).pathname, roomName: `R${new URL(call.url).pathname.slice(-1)}` } } }),
+    );
+    const rooms = await Room.query(new Query(), { load: true });
+    expect(rooms.map((r) => r.getRoomName()).sort()).toEqual(['R1', 'R2']);
+    expect(calls).toHaveLength(3);
+  });
+
+  it('clone() copies filters independently', () => {
+    const a = new Query('Student').addPropertyFilter('x', 'equals', 1).setPageNumber(2);
+    const b = a.clone().addPropertyFilter('y', 'equals', 2);
+    expect(a.getPropertyFilters()).toHaveLength(1);
+    expect(b.getPropertyFilters()).toHaveLength(2);
+    expect(b.getQueryOptions()['page-number']).toBe(2);
+  });
+});
+
 describe('record cache', () => {
   const room = { room: { entityType: 'Room', href: '/rest-v2/rooms/1', roomName: 'M314' } };
 

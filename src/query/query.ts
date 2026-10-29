@@ -154,6 +154,19 @@ export class Query {
     return this.userTagFilters;
   }
 
+  /** An independent copy of this query. */
+  clone(): Query {
+    return new Query(this.resourceType, {
+      propertyFilters: this.propertyFilters.map((f) => ({ ...f })),
+      userTagFilters: this.userTagFilters.map((f) => ({ ...f })),
+      pageNumber: this.pageNumber,
+      pageSize: this.pageSize,
+      taggings: this.taggings,
+      orderProperty: this.orderProperty,
+      orderDirection: this.orderDirection,
+    });
+  }
+
   /** The query-string parameters for this query, e.g. `{ 'filters.legalLastName.equals': 'Adams' }`. */
   getQueryOptions(): QueryParams {
     const params: QueryParams = {};

@@ -16,7 +16,7 @@ export interface Gateway {
   retrieve<T extends ModelBase = ModelBase>(resourceType: string, id: string | number): Promise<T>;
   update<T extends ModelBase>(model: T): Promise<T>;
   delete(model: ModelBase): Promise<ApiResponse>;
-  query<T extends ModelBase = ModelBase>(query: Query): Promise<Collection<T>>;
+  query<T extends ModelBase = ModelBase>(query: Query, options?: QueryOptions): Promise<Collection<T>>;
   refresh<T extends ModelBase>(model: T): Promise<T>;
   getChanges<T extends ModelBase = ModelBase>(resourceType: string, fromRevision?: number, toRevision?: number): Promise<Change<T>[]>;
   bulkCreate<T extends ModelBase>(resourceType: string, models: Iterable<T>, checkForPersistence?: boolean): Promise<Collection<T>>;
@@ -44,6 +44,28 @@ export function detectImageType(data: Uint8Array): { contentType: string; extens
   if (hex.startsWith('47494638')) return { contentType: 'image/gif', extension: 'gif' };
   if (hex.startsWith('52494646') && hex.slice(16, 24) === '57454250') return { contentType: 'image/webp', extension: 'webp' };
   return { contentType: 'application/octet-stream', extension: 'bin' };
+}
+
+export interface CurrentOptions {
+  /** The moment to test against. Default: now. */
+  at?: Date;
+  /** The end-date property. Default `endDate`. */
+  endProperty?: string;
+}
+
+export interface QueryOptions {
+  /**
+   * Load each result's full record. Listings only return references (id and
+   * href). Loads are paced and duplicates merged, so this is safe for large results.
+   */
+  load?: boolean;
+  /**
+   * Only records that haven't ended: the end date is after `at`, **or** it's
+   * empty (ongoing). Arbor's `endDate.after` filter alone drops ongoing
+   * records, so this runs both queries and merges them. Records that start
+   * in the future are included.
+   */
+  current?: boolean | CurrentOptions;
 }
 
 /** `{ property: value }` or `{ property: [operator, value] }`. */
@@ -376,7 +398,38 @@ export class RestGateway implements Gateway {
     return this.hydrateModelChanges<T>(response.changes, resourceType);
   }
 
-  async query<T extends ModelBase = ModelBase>(query: Query): Promise<Collection<T>> {
+  async query<T extends ModelBase = ModelBase>(query: Query, options: QueryOptions = {}): Promise<Collection<T>> {
+    let listing: Collection<T>;
+    if (options.current) {
+      const { at = new Date(), endProperty = 'endDate' } = options.current === true ? {} : options.current;
+      const [ending, ongoing] = await Promise.all([
+        this.runQuery<T>(query.clone().addPropertyFilter(endProperty, Query.OPERATOR_AFTER, at)),
+        this.runQuery<T>(query.clone().addPropertyFilter(endProperty, Query.OPERATOR_EQUALS, null)),
+      ]);
+      const seen = new Set<string>();
+      listing = new Collection<T>();
+      for (const m of [...ending, ...ongoing]) {
+        const key = m.getResourceUrl() ?? '';
+        if (key && seen.has(key)) continue;
+        seen.add(key);
+        listing.add(m);
+      }
+    } else {
+      listing = await this.runQuery<T>(query);
+    }
+    if (options.load) await this.loadAll(listing);
+    return listing;
+  }
+
+  /**
+   * Loads every model's full record, paced and with duplicates merged.
+   * Returns the same models, now filled in.
+   */
+  async loadAll<T extends ModelBase>(models: Iterable<T>): Promise<T[]> {
+    return Promise.all([...models].map((m) => this.refresh(m)));
+  }
+
+  protected async runQuery<T extends ModelBase>(query: Query): Promise<Collection<T>> {
     const type = query.getResourceType();
     if (!type) throw new QueryError('Query has no resource type');
 

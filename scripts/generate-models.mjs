@@ -209,8 +209,8 @@ function emitModel(model) {
   lines.push(`    super(${name}.RESOURCE_TYPE, properties, gateway);`);
   lines.push('  }');
   lines.push('');
-  lines.push(`  static query(query: Query = new Query()): Promise<Collection<${name}>> {`);
-  lines.push(`    return ModelBase.requireDefaultGateway('${name}.query').query<${name}>(query.setResourceType(${name}.RESOURCE_TYPE));`);
+  lines.push(`  static query(query: Query = new Query(), options?: QueryOptions): Promise<Collection<${name}>> {`);
+  lines.push(`    return ModelBase.requireDefaultGateway('${name}.query').query<${name}>(query.setResourceType(${name}.RESOURCE_TYPE), options);`);
   lines.push('  }');
   lines.push('');
   lines.push(`  static retrieve(id: string | number): Promise<${name}> {`);
@@ -245,7 +245,7 @@ function emitModel(model) {
   const usesCollection = true; // query() always returns a Collection
   const header = [
     GENERATED_HEADER,
-    `import type { Gateway } from '${core}api/gateway.js';`,
+    `import type { Gateway, QueryOptions } from '${core}api/gateway.js';`,
     usesCollection ? `import type { Collection } from '${core}model/collection.js';` : null,
     `import { ModelBase } from '${core}model/model-base.js';`,
     `import { Query } from '${core}query/query.js';`,

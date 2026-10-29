@@ -100,6 +100,27 @@ console.log(person?.getLegalFirstName());
 - `model.delete()` exists as a shortcut for `gateway.delete(model)`.
 - `HttpClient` takes an optional `timeoutMs`.
 
+## Query options
+
+```ts
+// Listings only return references (id + href). `load: true` fetches each full record.
+const rooms = await Room.query(new Query(), { load: true });
+
+// Only records that haven't ended: the end date is after now, or empty (ongoing).
+const enrolments = await api.query(
+  new Query('AcademicUnitEnrolment').addPropertyFilter('student', 'equals', student),
+  { current: true, load: true },
+);
+
+// A different end-date property, or a different moment:
+await api.query(q, { current: { endProperty: 'endDatetime', at: new Date('2026-12-01') } });
+
+// Load models you already have:
+await api.loadAll(models);
+```
+
+`current` sends two requests (end date after `at`, and end date empty) and merges them. Arbor's `endDate.after` filter on its own silently drops ongoing records: a teacher with 72 current timetable slots gets back 7. Records that start in the future are included.
+
 ## Rate limits and paging
 
 Arbor rate-limits by request volume (HTTP 429). Its block can last over a minute, and it doesn't send a `Retry-After` header. The HTTP client handles this for you:
