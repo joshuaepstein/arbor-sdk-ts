@@ -47,10 +47,16 @@ export class ServerError extends ArborError {
 }
 
 /** The API responded with 404 (PHP: `ResourceNotFoundException`). */
-export class ResourceNotFoundError extends ArborError {}
+export class ResourceNotFoundError extends ArborError {
+  /** Always 404, matching `ServerError.status`. */
+  readonly status = 404;
+}
 
 /** The API rejected the payload (PHP: `ServerValidationException`). */
 export class ServerValidationError extends ArborError {
+  /** Always 422, matching `ServerError.status`. */
+  readonly status = 422;
+
   constructor(
     message = '',
     readonly validationErrors: unknown = [],

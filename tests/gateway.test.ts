@@ -57,6 +57,7 @@ describe('HttpClient', () => {
     expect(err).toBeInstanceOf(ServerValidationError);
     expect(err.message).toContain('Validation failed: Supplied value is not valid');
     expect(err.validationErrors).toEqual(['Supplied value is not valid']);
+    expect(err.status).toBe(422);
   });
 
   it('maps 404 and server errors', async () => {
