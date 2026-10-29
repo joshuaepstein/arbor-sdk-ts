@@ -70,6 +70,16 @@ export class Query {
     this.orderDirection = init.orderDirection ?? null;
   }
 
+  /**
+   * Adds `filters.<property>.<operator>=<value>`. Pass a model to filter by
+   * its resource URL.
+   *
+   * Arbor quirks (verified against a live school):
+   * - Datetimes: use `after` / `before`. `from` / `to` on a datetime silently return 0 rows.
+   * - `in` doesn't work for linked resources (e.g. `academicUnit`): it returns
+   *   0 rows or a validation error. Query each one separately instead.
+   * - `endDate.after` (today) is a cheap way to keep only current records.
+   */
   addPropertyFilter(propertyName: string, operator: PropertyFilter['operator'], value: FilterValue): this {
     this.propertyFilters.push({ propertyName, operator, value });
     return this;
@@ -95,6 +105,12 @@ export class Query {
   getPageNumber(): number | null {
     return this.pageNumber;
   }
+  /**
+   * Caution: Arbor applies its permission filtering after cutting the page,
+   * so a page-size query can come back short or empty (we've seen 0 rows at
+   * page-size 200 for a student with 189 records). Leave it unset to get every
+   * matching row in one response, which is also the default.
+   */
   setPageSize(pageSize: number | null): this {
     this.pageSize = pageSize;
     return this;

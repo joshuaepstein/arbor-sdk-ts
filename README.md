@@ -100,6 +100,26 @@ console.log(person?.getLegalFirstName());
 - `model.delete()` exists as a shortcut for `gateway.delete(model)`.
 - `HttpClient` takes an optional `timeoutMs`.
 
+## Rate limits and paging
+
+Arbor rate-limits by request volume (HTTP 429). Its block can last over a minute, and it doesn't send a `Retry-After` header. The HTTP client handles this for you:
+
+- **Paced:** at most 10 requests start per second, and at most 4 run at once. `Promise.all(refs.map((r) => r.load()))` is safe even for hundreds of records; it just takes longer.
+- **Retried:** 429 and 503 responses are retried up to 5 times, backing off 2s, 4s, 8s, 16s, 32s (or the `Retry-After` delay if Arbor sends one).
+- **Paused together:** while one request is backing off, every other request waits too, so the client stops adding to the burst.
+
+```ts
+createClient({
+  baseUrl, user, password,
+  maxRequestsPerSecond: 5,   // default 10
+  maxConcurrentRequests: 2,  // default 4
+  maxRetries: 6,             // default 5
+  retryBaseDelayMs: 3000,    // default 2000
+});
+```
+
+**Avoid `page-size`.** Arbor appears to filter out rows you can't see *after* cutting a page, so paged results come back short or even empty. In testing, a student with 189 enrolments returned 50 rows at `page-size=50`, 89 at 100 and **0** at 200. Leave `setPageSize()` unset: a query then returns every matching row in one response.
+
 ## Errors
 
 ```ts

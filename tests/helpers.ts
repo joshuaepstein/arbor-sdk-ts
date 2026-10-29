@@ -32,7 +32,7 @@ export function mockFetch(...replies: Reply[]) {
 
 export function setup(...replies: Reply[]) {
   const { fetch, calls } = mockFetch(...replies);
-  const http = new HttpClient({ baseUrl: 'https://school.example/', user: 'u', password: 'p', fetch });
+  const http = new HttpClient({ baseUrl: 'https://school.example/', user: 'u', password: 'p', fetch, maxRequestsPerSecond: Infinity });
   const api = new RestGateway(http);
   ModelBase.setDefaultGateway(api);
   return { api, http, calls };

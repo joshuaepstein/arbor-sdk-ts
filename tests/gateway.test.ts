@@ -13,6 +13,7 @@ import {
   ResourceNotFoundError,
   ResourceType,
   ServerError,
+  ServerValidationError,
   Staff,
   Student,
   UploadFile,
@@ -38,11 +39,23 @@ describe('HttpClient', () => {
     expect(call!.body).toEqual({ a: 1 });
   });
 
-  it('returns payloads for 200/201/204/422', async () => {
+  it('returns payloads for 200/201/204, and 422 on writes', async () => {
     const { fetch } = mockFetch({ status: 204 }, { status: 422, json: { response: { code: 422 } } });
     const http = new HttpClient({ baseUrl: 'https://x.test', fetch });
     expect(await http.sendRequest('DELETE', '/rest-v2/a/1')).toEqual({});
-    expect(await http.sendRequest('GET', '/rest-v2/a')).toEqual({ response: { code: 422 } });
+    expect(await http.sendRequest('POST', '/rest-v2/a', { body: {} })).toEqual({ response: { code: 422 } });
+  });
+
+  it('throws on a 422 for reads so a bad filter is not mistaken for "no results"', async () => {
+    const { fetch } = mockFetch({
+      status: 422,
+      json: { status: { success: false, code: 422, reason: 'Validation failed', errors: ['Supplied value is not valid'] } },
+    });
+    const http = new HttpClient({ baseUrl: 'https://x.test', fetch });
+    const err = (await http.sendRequest('GET', '/rest-v2/Sessions').catch((e) => e)) as ServerValidationError;
+    expect(err).toBeInstanceOf(ServerValidationError);
+    expect(err.message).toContain('Validation failed: Supplied value is not valid');
+    expect(err.validationErrors).toEqual(['Supplied value is not valid']);
   });
 
   it('maps 404 and server errors', async () => {
@@ -107,6 +120,116 @@ describe('HttpClient', () => {
     expect(file.type).toBe('text/plain');
     expect(await file.text()).toBe('hello');
     expect(calls[0]!.headers['Content-Type']).toBeUndefined();
+  });
+});
+
+describe('rate limiting', () => {
+  it('parses Retry-After seconds and dates', async () => {
+    const { parseRetryAfter } = await import('../src/api/http-client.js');
+    expect(parseRetryAfter('2')).toBe(2000);
+    expect(parseRetryAfter(new Date(10_000).toUTCString(), 4_000)).toBe(6_000);
+    expect(parseRetryAfter(null)).toBeNull();
+    expect(parseRetryAfter('soon')).toBeNull();
+  });
+
+  it('retries 429 and 503, then succeeds', async () => {
+    const { fetch, calls } = mockFetch(
+      { status: 429, text: 'Too Many Requests' },
+      { status: 503, text: 'busy' },
+      { json: { ok: 1 } },
+    );
+    const http = new HttpClient({ baseUrl: 'https://x.test', fetch, retryBaseDelayMs: 0 });
+    expect(await http.sendRequest('GET', '/rest-v2/a')).toEqual({ ok: 1 });
+    expect(calls).toHaveLength(3);
+  });
+
+  it('honours Retry-After', async () => {
+    let n = 0;
+    const started = Date.now();
+    const http = new HttpClient({
+      baseUrl: 'https://x.test',
+      retryBaseDelayMs: 10_000, // would be slow if Retry-After were ignored
+      fetch: async () =>
+        n++ === 0
+          ? new Response('slow down', { status: 429, headers: { 'Retry-After': '0.05' } })
+          : new Response('{"ok":true}', { status: 200 }),
+    });
+    expect(await http.sendRequest('GET', '/rest-v2/a')).toEqual({ ok: true });
+    expect(Date.now() - started).toBeLessThan(2_000);
+  });
+
+  it('gives up after maxRetries with a helpful message', async () => {
+    const { fetch, calls } = mockFetch(...Array.from({ length: 3 }, () => ({ status: 429, text: 'Too Many Requests' })));
+    const http = new HttpClient({ baseUrl: 'https://x.test', fetch, maxRetries: 2, retryBaseDelayMs: 0 });
+    const err = (await http.sendRequest('GET', '/rest-v2/a').catch((e) => e)) as ServerError;
+    expect(calls).toHaveLength(3);
+    expect(err.status).toBe(429);
+    expect(err.message).toContain('Rate limited by Arbor');
+  });
+
+  it('pauses all requests while one is backing off', async () => {
+    const starts: number[] = [];
+    let first = true;
+    const http = new HttpClient({
+      baseUrl: 'https://x.test',
+      maxRequestsPerSecond: Infinity,
+      retryBaseDelayMs: 100,
+      fetch: async () => {
+        starts.push(Date.now());
+        if (first) {
+          first = false;
+          return new Response('Too Many Requests', { status: 429 });
+        }
+        return new Response('{}', { status: 200 });
+      },
+    });
+    const t0 = Date.now();
+    const a = http.sendRequest('GET', '/rest-v2/a');
+    await new Promise((r) => setTimeout(r, 20)); // second request arrives during the backoff
+    await Promise.all([a, http.sendRequest('GET', '/rest-v2/b')]);
+    expect(starts).toHaveLength(3);
+    expect(starts[1]! - t0).toBeGreaterThanOrEqual(90);
+    expect(starts[2]! - t0).toBeGreaterThanOrEqual(90);
+  });
+
+  it('paces requests to maxRequestsPerSecond', async () => {
+    const starts: number[] = [];
+    const http = new HttpClient({
+      baseUrl: 'https://x.test',
+      maxRequestsPerSecond: 20, // one every 50ms
+      fetch: async () => {
+        starts.push(Date.now());
+        return new Response('{}', { status: 200 });
+      },
+    });
+    await Promise.all(Array.from({ length: 5 }, () => http.sendRequest('GET', '/rest-v2/a')));
+    expect(starts[4]! - starts[0]!).toBeGreaterThanOrEqual(190);
+  });
+
+  it('caps parallel requests', async () => {
+    let inFlight = 0;
+    let peak = 0;
+    const http = new HttpClient({
+      baseUrl: 'https://x.test',
+      maxConcurrentRequests: 3,
+      maxRequestsPerSecond: Infinity,
+      fetch: async () => {
+        peak = Math.max(peak, ++inFlight);
+        await new Promise((r) => setTimeout(r, 5));
+        inFlight--;
+        return new Response('{}', { status: 200 });
+      },
+    });
+    await Promise.all(Array.from({ length: 20 }, () => http.sendRequest('GET', '/rest-v2/a')));
+    expect(peak).toBe(3);
+  });
+
+  it('applies the cap and retries to fetchRaw too', async () => {
+    const { fetch, calls } = mockFetch({ status: 429, text: 'x' }, { status: 200, text: 'img' });
+    const http = new HttpClient({ baseUrl: 'https://x.test', fetch, retryBaseDelayMs: 0 });
+    const res = await http.fetchRaw('/rest-v2/profile-picture/student/1');
+    expect(res.status).toBe(200);
+    expect(calls).toHaveLength(2);
   });
 });
 

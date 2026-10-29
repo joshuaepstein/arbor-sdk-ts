@@ -24,7 +24,8 @@ const fail = (msg: string, e?: unknown) => {
 console.log('\n1. Listing (query) request');
 let students: Collection<Student> = new Collection();
 try {
-  students = await api.query<Student>(new Query(ResourceType.STUDENT).setPageSize(3));
+  // No page size: Arbor's paging can return short or empty pages (see Query.setPageSize).
+  students = await api.query<Student>(new Query(ResourceType.STUDENT));
   if (students.length > 0) ok(`got ${students.length} student(s)`);
   else fail('request succeeded but returned no students (empty sandbox, or wrong listing URL / root key?)');
 } catch (e) {
