@@ -34,6 +34,7 @@ export { Hydrator, type Representation } from './model/hydrator.js';
 export { instantiateModel, isModelRegistered, registerModel, type ModelFactory } from './model/registry.js';
 
 export { AttendanceRegistration, AttendanceRollCallRegistration, StandardizedAssessmentMarks } from './service/services.js';
+export { TimetableService, type Lesson, type TimetableRange } from './service/timetable.js';
 export type { AttendanceMarkEntry, RollCallMarkEntry, StandardizedAssessmentMarkEntry } from './service/services.js';
 
 export * from './resource/resource-type.js';

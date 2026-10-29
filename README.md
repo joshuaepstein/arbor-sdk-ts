@@ -202,6 +202,27 @@ await api.upload('/rest-v2/documents/upload',
 
 `contents` can be a string, `Blob`, `ArrayBuffer` or typed array. `FormData` can only carry a part's `Content-Type`, so any other per-part headers are ignored.
 
+### Timetables
+
+```ts
+const week = { from: new Date('2026-11-02'), to: new Date('2026-11-07') }; // `to` is exclusive
+
+const lessons = await api.getStudentTimetable(4987, week); // a Student, an id, or a resource URL
+const staffLessons = await api.getStaffTimetable(staff, week);
+
+for (const l of lessons) {
+  console.log(l.start, l.end, l.className, l.roomName, l.isSuspended);
+  // also: l.session, l.academicUnit, l.room, l.timetableSlot (typed models)
+}
+```
+
+- **Students:** current class enrolments (`AcademicUnitEnrolment`), then each class's sessions in the range.
+- **Staff:** current timetable-slot assignments (`TimetableSlotStaff`), then each slot's sessions.
+- **Permissions:** read access to `Session`, `AcademicUnit`, `Room`, and `AcademicUnitEnrolment` or `TimetableSlotStaff`.
+- **Missing room:** `roomName` is `null` when a lesson has no room, or when the app can't read `Room`.
+- **Cover:** cover and other one-off staff changes aren't included, because they aren't linked to the teacher's slots.
+- **Speed:** on a live school, one week takes about 10s for a student and 15s for a teacher, because Arbor needs one request per class or slot and per lesson. For a whole school, sync to your own database rather than calling this live. See `examples/timetable.ts`.
+
 ### Attendance and assessment services
 
 ```ts

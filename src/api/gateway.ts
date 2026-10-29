@@ -6,6 +6,7 @@ import { Hydrator, type Representation } from '../model/hydrator.js';
 import type { ModelBase } from '../model/model-base.js';
 import { instantiateModel } from '../model/registry.js';
 import { registerGeneratedModels } from '../models/registry.generated.js';
+import { TimetableService, type Lesson, type TimetableRange } from '../service/timetable.js';
 import { Query, type FilterValue } from '../query/query.js';
 import { HttpMethod, type ApiResponse, type HttpClientInterface } from './http-client.js';
 import type { UploadFile } from './upload-file.js';
@@ -375,6 +376,24 @@ export class RestGateway implements Gateway {
     const tagged = response.contentTag?.tagged;
     if (!tagged || !tagged.entityType || tagged.id === undefined) return null;
     return { entityType: tagged.entityType, id: tagged.id };
+  }
+
+  /**
+   * A student's lessons between `from` (inclusive) and `to` (exclusive),
+   * sorted by start time, with class and room names.
+   *
+   * ```ts
+   * const lessons = await api.getStudentTimetable(student, { from: new Date('2026-11-02'), to: new Date('2026-11-07') });
+   * ```
+   * Takes a Student, its id or its resource URL.
+   */
+  getStudentTimetable(student: ModelBase | string | number, range: TimetableRange): Promise<Lesson[]> {
+    return new TimetableService(this).forStudent(student, range);
+  }
+
+  /** A staff member's timetabled lessons in a date range. See {@link getStudentTimetable}. */
+  getStaffTimetable(staff: ModelBase | string | number, range: TimetableRange): Promise<Lesson[]> {
+    return new TimetableService(this).forStaff(staff, range);
   }
 
   /** Uploads a file as `multipart/form-data`. */

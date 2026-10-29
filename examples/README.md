@@ -26,3 +26,9 @@ Many examples use hard-coded IDs (students 1, 137, 710...) from Arbor's demo dat
 - **`print_r($hydrator->extractArray($model))` becomes `dump(model)`.** It prints `model.toJSON()`.
 - **`serialize()` / `unserialize()` become `JSON.stringify(model)` / `ModelBase.fromJSON(...)`.**
 - **Module models are namespaces.** For example `new UkDfe.EarlyYearsPupilPremiumRecipient()` with `UkDfeResourceType.UK_DFE_...`.
+
+## Newer examples
+
+- `student-contact-details.ts <id>`: email addresses, phone numbers, addresses and guardians.
+- `student-profile.ts <id>`: name, email and profile picture (saved to `photos/`, gitignored).
+- `timetable.ts <student|staff> <id> [YYYY-MM-DD]`: a week's lessons with class and room.
