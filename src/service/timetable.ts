@@ -116,7 +116,7 @@ export class TimetableService {
     const unit = session.getAcademicUnit();
     const location = session.getLocation();
     // Redacted links (no permission) arrive as `{ entityType }` only, with no href.
-    const room = location?.getResourceUrl() && location.getResourceType() === 'Room' ? (location as Room) : null;
+    const room = location && !location.isRedacted() && location.getResourceType() === 'Room' ? (location as Room) : null;
     return {
       start,
       end,

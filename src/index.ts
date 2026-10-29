@@ -35,6 +35,7 @@ export { instantiateModel, isModelRegistered, registerModel, type ModelFactory }
 
 export { AttendanceRegistration, AttendanceRollCallRegistration, StandardizedAssessmentMarks } from './service/services.js';
 export { TimetableService, type Lesson, type TimetableRange } from './service/timetable.js';
+export { StudentService, type ContactDetails, type GuardianInfo } from './service/students.js';
 export type { AttendanceMarkEntry, RollCallMarkEntry, StandardizedAssessmentMarkEntry } from './service/services.js';
 
 export * from './resource/resource-type.js';

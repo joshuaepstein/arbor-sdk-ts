@@ -7,6 +7,9 @@ import type { ModelBase } from '../model/model-base.js';
 import { instantiateModel } from '../model/registry.js';
 import { registerGeneratedModels } from '../models/registry.generated.js';
 import { TimetableService, type Lesson, type TimetableRange } from '../service/timetable.js';
+import { StudentService, type ContactDetails, type GuardianInfo } from '../service/students.js';
+import type { AcademicLevel } from '../models/AcademicLevel.js';
+import type { RegistrationForm } from '../models/RegistrationForm.js';
 import { Query, type FilterValue } from '../query/query.js';
 import { HttpMethod, type ApiResponse, type HttpClientInterface } from './http-client.js';
 import type { UploadFile } from './upload-file.js';
@@ -394,6 +397,26 @@ export class RestGateway implements Gateway {
   /** A staff member's timetabled lessons in a date range. See {@link getStudentTimetable}. */
   getStaffTimetable(staff: ModelBase | string | number, range: TimetableRange): Promise<Lesson[]> {
     return new TimetableService(this).forStaff(staff, range);
+  }
+
+  /** A student's year group (e.g. "Year 12") now or at `at`, or `null`. Takes a Student, id or URL. */
+  getYearGroup(student: ModelBase | string | number, at?: Date): Promise<AcademicLevel | null> {
+    return new StudentService(this).yearGroup(student, at);
+  }
+
+  /** A student's form / registration group (e.g. "12BV") now or at `at`, or `null`. */
+  getCurrentForm(student: ModelBase | string | number, at?: Date): Promise<RegistrationForm | null> {
+    return new StudentService(this).currentForm(student, at);
+  }
+
+  /** Emails, phone numbers and current addresses for a Student or Guardian (a model, or a student id / URL). */
+  getContactDetails(owner: ModelBase | string | number): Promise<ContactDetails> {
+    return new StudentService(this).contactDetails(owner);
+  }
+
+  /** A student's guardians, primary ones first; `{ contacts: true }` includes their contact details. */
+  getGuardians(student: ModelBase | string | number, options?: { contacts?: boolean }): Promise<GuardianInfo[]> {
+    return new StudentService(this).guardians(student, options);
   }
 
   /** Uploads a file as `multipart/form-data`. */

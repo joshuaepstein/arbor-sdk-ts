@@ -81,6 +81,20 @@ export class ModelBase {
     this.properties = { ...properties };
   }
 
+  /**
+   * True when the API sent only `{ entityType }`: no link and no data. Arbor
+   * does this for records the app isn't allowed to read, and for some records
+   * nested two levels deep. Calling `load()` on one won't help, since there's no URL.
+   */
+  isRedacted(): boolean {
+    return !this.resourceUrl && Object.keys(this.properties).length === 0 && this.resourceType !== null;
+  }
+
+  /** True when this is only a link (`href`, maybe `id`): call `load()` for the rest. */
+  isReference(): boolean {
+    return !!this.resourceUrl && Object.keys(this.properties).every((k) => k === 'id' || k === 'uniqueObjectId');
+  }
+
   hasProperty(name: string): boolean {
     return Object.prototype.hasOwnProperty.call(this.properties, name);
   }

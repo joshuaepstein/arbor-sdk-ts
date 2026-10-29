@@ -223,6 +223,35 @@ for (const l of lessons) {
 - **Cover:** cover and other one-off staff changes aren't included, because they aren't linked to the teacher's slots.
 - **Speed:** on a live school, one week takes about 10s for a student and 15s for a teacher, because Arbor needs one request per class or slot and per lesson. For a whole school, sync to your own database rather than calling this live. See `examples/timetable.ts`.
 
+### Student lookups
+
+```ts
+(await api.getYearGroup(4987))?.getAcademicLevelName();          // "Year 12"
+(await api.getCurrentForm(4987))?.getRegistrationFormName();     // "12BV"
+
+const c = await api.getContactDetails(4987);   // a Student or Guardian (model, id or URL)
+c.emails;      // [{ address, type, model }]
+c.phones;      // [{ number, extension, type, model }]
+c.addresses;   // current only: [{ lines, postcode, type, isCorrespondenceAddress, model }]
+c.unavailable; // parts the app can't read, e.g. [{ part: 'phones', reason: 'Forbidden: …' }]
+
+const guardians = await api.getGuardians(4987, { contacts: true }); // primary guardians first
+guardians[0].name;           // from the guardian's Person, or null if the app can't read Person
+guardians[0].relationship;   // "Mother"; also relationshipName and relationshipCode
+guardians[0].contacts;       // ContactDetails, with { contacts: true }
+```
+
+Contact details belong to the Student or Guardian record, not to their Person. If the app can't read one part (say, phone numbers), that part comes back empty and is listed in `unavailable`. The other parts are still returned.
+
+### Redacted and reference-only records
+
+Arbor sends `{ entityType: 'Person' }` with nothing else for records the app isn't allowed to read, and for some records nested two levels deep. It sends just `{ href, id }` for records in lists.
+
+```ts
+person.isRedacted();  // true: no link or data. load() can't help
+person.isReference(); // true: link only. Call load() for the rest
+```
+
 ### Attendance and assessment services
 
 ```ts
