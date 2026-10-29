@@ -35,6 +35,16 @@ export { instantiateModel, isModelRegistered, registerModel, type ModelFactory }
 
 export { AttendanceRegistration, AttendanceRollCallRegistration, StandardizedAssessmentMarks } from './service/services.js';
 export { TimetableService, type Lesson, type TimetableRange } from './service/timetable.js';
+export {
+  GraphQLError,
+  formatGraphQLArgs,
+  GRAPHQL_PATH,
+  GRAPHQL_DEFAULT_PAGE_SIZE,
+  type GraphQLAllOptions,
+  type GraphQLArgs,
+  type GraphQLArgValue,
+  type GraphQLErrorEntry,
+} from './service/graphql.js';
 export { StudentService, type ContactDetails, type ContactOptions, type ContactPart, type GuardianInfo } from './service/students.js';
 export type { AttendanceMarkEntry, RollCallMarkEntry, StandardizedAssessmentMarkEntry } from './service/services.js';
 

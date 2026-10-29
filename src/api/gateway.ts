@@ -7,6 +7,7 @@ import type { ModelBase } from '../model/model-base.js';
 import { instantiateModel } from '../model/registry.js';
 import { registerGeneratedModels } from '../models/registry.generated.js';
 import { TimetableService, type Lesson, type TimetableRange } from '../service/timetable.js';
+import { runGraphQL, runGraphQLAll, type GraphQLAllOptions } from '../service/graphql.js';
 import { StudentService, type ContactDetails, type ContactOptions, type ContactPart, type GuardianInfo } from '../service/students.js';
 import type { AcademicLevel } from '../models/AcademicLevel.js';
 import type { RegistrationForm } from '../models/RegistrationForm.js';
@@ -392,6 +393,36 @@ export class RestGateway implements Gateway {
    */
   getStudentTimetable(student: ModelBase | string | number, range: TimetableRange): Promise<Lesson[]> {
     return new TimetableService(this).forStudent(student, range);
+  }
+
+  /**
+   * Runs a query against Arbor's GraphQL API (`/graphql/query`, same credentials) and
+   * returns `data`. GraphQL returns the fields you ask for in one request, so it's the
+   * fast way to read many records; REST lists only return links.
+   *
+   * ```ts
+   * const { Room } = await api.graphql<{ Room: { id: number; displayName: string }[] }>('{ Room { id displayName } }');
+   * ```
+   * Throws `GraphQLError` when Arbor reports errors (`err.isForbidden` for permission errors).
+   * Lists are capped at 3000 rows unless paged: use {@link graphqlAll} for anything bigger.
+   */
+  graphql<T = Record<string, any>>(query: string, variables?: Record<string, unknown>): Promise<T> {
+    return runGraphQL<T>(this.httpClient, query, variables);
+  }
+
+  /**
+   * Every row of one GraphQL type, fetched page by page (5000 a page, numbered from 0)
+   * so Arbor's silent 3000-row cap never cuts the list short.
+   *
+   * ```ts
+   * const lessons = await api.graphqlAll('Session', 'id startDatetime location { displayName } academicUnit { id }', {
+   *   filter: { startDatetime_after: monday, startDatetime_before: saturday },
+   * });
+   * ```
+   * Date filters use `_after` / `_before`; `Date` values are formatted for you.
+   */
+  graphqlAll<T = Record<string, any>>(type: string, fields: string, options?: GraphQLAllOptions): Promise<T[]> {
+    return runGraphQLAll<T>(this.httpClient, type, fields, options);
   }
 
   /** A staff member's timetabled lessons in a date range. See {@link getStudentTimetable}. */

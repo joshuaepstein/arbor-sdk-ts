@@ -202,6 +202,28 @@ await api.upload('/rest-v2/documents/upload',
 
 `contents` can be a string, `Blob`, `ArrayBuffer` or typed array. `FormData` can only carry a part's `Content-Type`, so any other per-part headers are ignored.
 
+### GraphQL (fast bulk reads)
+
+REST listings only return links, so reading many records means one request each (about 10 a second). Arbor's GraphQL API, on the same host with the same credentials, returns the fields you ask for in one go: a whole school's 63,000 class enrolments take under 2 seconds.
+
+```ts
+// Any query; returns `data`.
+const { Room } = await api.graphql<{ Room: { id: number; displayName: string }[] }>('{ Room { id displayName } }');
+
+// Every matching row, paged for you.
+const lessons = await api.graphqlAll('Session', 'id startDatetime endDatetime location { displayName } academicUnit { id }', {
+  filter: { startDatetime_after: new Date('2026-11-02'), startDatetime_before: new Date('2026-11-03') },
+});
+```
+
+Things Arbor doesn't tell you, which `graphqlAll()` handles:
+
+- **Unpaged lists stop at 3000 rows, silently.** `graphqlAll()` pages (5000 rows a page) until a page comes back short.
+- **Pages are numbered from 0.** Starting at 1 skips the first page.
+- **Date filters are `_after` / `_before`** (`from` / `to` are rejected). `Date` values are formatted as Arbor dates.
+
+Errors come back as `GraphQLError` with Arbor's `errors` array. `err.isForbidden` is true when the API user isn't allowed to read a type or field. Introspecting the whole schema at once fails on Arbor's side; ask for one type at a time (`{ __type(name: "Session") { fields { name } } }`).
+
 ### Timetables
 
 ```ts
