@@ -118,6 +118,20 @@ createClient({
 });
 ```
 
+### Caching
+
+Identical requests that are already in flight are always merged. If 20 lessons load the same room at once, it's fetched once.
+
+You can also keep single records for a while (`retrieve()`, `load()` / `refresh()`). This helps when many records point to the same rooms, classes or staff:
+
+```ts
+const api = createClient({ baseUrl, user, password, cacheTtlMs: 5 * 60_000 });
+api.clearCache();                    // drop everything
+api.clearCache('/rest-v2/rooms/98'); // drop one record
+```
+
+The cache is off by default. Saving or deleting a record through the gateway clears its entry, and `update()` always compares against a fresh copy from the server. List queries are never cached.
+
 **Avoid `page-size`.** Arbor appears to filter out rows you can't see *after* cutting a page, so paged results come back short or even empty. In testing, a student with 189 enrolments returned 50 rows at `page-size=50`, 89 at 100 and **0** at 200. Leave `setPageSize()` unset: a query then returns every matching row in one response.
 
 ## Errors

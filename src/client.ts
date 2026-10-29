@@ -17,8 +17,8 @@ export interface CreateClientOptions extends HttpClientOptions, RestGatewayOptio
  * ```
  */
 export function createClient(options: CreateClientOptions): RestGateway {
-  const { setAsDefault = true, hydrator, camelCaseToDash, pluralizeFilter, ...http } = options;
-  const gateway = new RestGateway(new HttpClient(http), { hydrator, camelCaseToDash, pluralizeFilter });
+  const { setAsDefault = true, hydrator, camelCaseToDash, pluralizeFilter, cacheTtlMs, ...http } = options;
+  const gateway = new RestGateway(new HttpClient(http), { hydrator, camelCaseToDash, pluralizeFilter, cacheTtlMs });
   if (setAsDefault) ModelBase.setDefaultGateway(gateway);
   return gateway;
 }

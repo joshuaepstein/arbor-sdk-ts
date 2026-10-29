@@ -12,6 +12,7 @@ import {
   QueryError,
   ResourceNotFoundError,
   ResourceType,
+  Room,
   ServerError,
   ServerValidationError,
   Staff,
@@ -415,6 +416,90 @@ describe('RestGateway', () => {
     expect(http.getApplicationId()).toBe('my-app');
     await api.query(new Query('Student'));
     expect(calls[0]!.headers['x-mis-application-id']).toBe('my-app');
+  });
+});
+
+describe('record cache', () => {
+  const room = { room: { entityType: 'Room', href: '/rest-v2/rooms/1', roomName: 'M314' } };
+
+  function counting(reply: () => unknown, delayMs = 0) {
+    let calls = 0;
+    const http = new HttpClient({
+      baseUrl: 'https://x.test',
+      maxRequestsPerSecond: Infinity,
+      fetch: async () => {
+        calls++;
+        if (delayMs) await new Promise((r) => setTimeout(r, delayMs));
+        return new Response(JSON.stringify(reply()), { status: 200 });
+      },
+    });
+    return { http, count: () => calls };
+  }
+
+  it('merges identical requests that are in flight together, even with caching off', async () => {
+    const { http, count } = counting(() => room, 10);
+    const api = new RestGateway(http);
+    const rooms = await Promise.all(Array.from({ length: 10 }, () => api.retrieve<Room>('Room', 1)));
+    expect(count()).toBe(1);
+    expect(rooms.every((r) => r.getRoomName() === 'M314')).toBe(true);
+    expect(new Set(rooms).size).toBe(10); // separate model instances
+    await api.retrieve('Room', 1);
+    expect(count()).toBe(2); // not cached afterwards
+  });
+
+  it('reuses records within cacheTtlMs, and copies so callers cannot corrupt the cache', async () => {
+    const { http, count } = counting(() => room);
+    const api = new RestGateway(http, { cacheTtlMs: 60_000 });
+    const a = await api.retrieve<Room>('Room', 1);
+    a.setRoomName('changed locally');
+    const b = await api.retrieve<Room>('Room', 1);
+    const c = new Room({}, api);
+    c.setResourceUrl('/rest-v2/rooms/1');
+    await c.load();
+    expect(count()).toBe(1);
+    expect(b.getRoomName()).toBe('M314');
+    expect(c.getRoomName()).toBe('M314');
+  });
+
+  it('expires entries and can be cleared', async () => {
+    const { http, count } = counting(() => room);
+    const api = new RestGateway(http, { cacheTtlMs: 20 });
+    await api.retrieve('Room', 1);
+    await new Promise((r) => setTimeout(r, 30));
+    await api.retrieve('Room', 1);
+    expect(count()).toBe(2);
+    api.clearCache();
+    await api.retrieve('Room', 1);
+    expect(count()).toBe(3);
+  });
+
+  it('update() diffs against a fresh copy and clears the cached entry', async () => {
+    const replies = [
+      { person: { entityType: 'Person', href: '/rest-v2/persons/1', legalFirstName: 'A' } }, // retrieve (cached)
+      { person: { entityType: 'Person', href: '/rest-v2/persons/1', legalFirstName: 'Server' } }, // update's fresh copy
+      { person: { entityType: 'Person', href: '/rest-v2/persons/1', legalFirstName: 'B' } }, // PUT response
+      { person: { entityType: 'Person', href: '/rest-v2/persons/1', legalFirstName: 'B' } }, // retrieve after save
+    ];
+    const urls: string[] = [];
+    const http = new HttpClient({
+      baseUrl: 'https://x.test',
+      maxRequestsPerSecond: Infinity,
+      fetch: async (url, init) => {
+        urls.push(`${init.method} ${url}`);
+        return new Response(JSON.stringify(replies.shift()), { status: 200 });
+      },
+    });
+    const api = new RestGateway(http, { cacheTtlMs: 60_000 });
+    const p = await api.retrieve<Person>('Person', 1);
+    p.setLegalFirstName('B');
+    await api.update(p);
+    expect((await api.retrieve<Person>('Person', 1)).getLegalFirstName()).toBe('B');
+    expect(urls).toEqual([
+      'GET https://x.test/rest-v2/persons/1',
+      'GET https://x.test/rest-v2/persons/1',
+      'PUT https://x.test/rest-v2/persons/1',
+      'GET https://x.test/rest-v2/persons/1',
+    ]);
   });
 });
 

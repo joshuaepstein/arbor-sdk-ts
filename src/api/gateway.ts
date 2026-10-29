@@ -53,6 +53,13 @@ export interface RestGatewayOptions {
   hydrator?: Hydrator;
   camelCaseToDash?: CamelCaseToDash;
   pluralizeFilter?: PluralizeFilter;
+  /**
+   * Keep single-record responses (`retrieve()`, `refresh()` / `load()`) for this
+   * long and reuse them. Default 0 (off). Saving or deleting a record through
+   * this gateway clears its entry; {@link RestGateway.clearCache} clears everything.
+   * Identical requests already in flight are always merged, cache or not.
+   */
+  cacheTtlMs?: number;
 }
 
 const isPlainObject = (v: unknown): v is Record<string, unknown> =>
@@ -85,6 +92,9 @@ export class RestGateway implements Gateway {
   readonly hydrator: Hydrator;
   protected readonly camelCaseToDash: CamelCaseToDash;
   protected readonly pluralizeFilter: PluralizeFilter;
+  protected cacheTtlMs: number;
+  private readonly inFlight = new Map<string, Promise<ApiResponse>>();
+  private readonly cache = new Map<string, { at: number; value: ApiResponse }>();
 
   constructor(
     protected readonly httpClient: HttpClientInterface,
@@ -94,6 +104,40 @@ export class RestGateway implements Gateway {
     this.hydrator = options.hydrator ?? new Hydrator();
     this.camelCaseToDash = options.camelCaseToDash ?? new CamelCaseToDash();
     this.pluralizeFilter = options.pluralizeFilter ?? new PluralizeFilter();
+    this.cacheTtlMs = Math.max(0, options.cacheTtlMs ?? 0);
+  }
+
+  /** Turns the single-record cache on (ms > 0) or off (0). */
+  setCacheTtl(ms: number): this {
+    this.cacheTtlMs = Math.max(0, ms);
+    if (this.cacheTtlMs === 0) this.cache.clear();
+    return this;
+  }
+
+  /** Drops one cached record (by resource URL), or everything. */
+  clearCache(resourceUrl?: string): void {
+    if (resourceUrl === undefined) this.cache.clear();
+    else this.cache.delete(resourceUrl);
+  }
+
+  /**
+   * GET for a single record: merges identical in-flight requests and, if
+   * enabled, serves from the cache. Returns a copy, so callers can't change
+   * the cached value.
+   */
+  protected async getRecord(url: string, fresh = false): Promise<ApiResponse> {
+    if (!fresh && this.cacheTtlMs > 0) {
+      const hit = this.cache.get(url);
+      if (hit && Date.now() - hit.at < this.cacheTtlMs) return structuredClone(hit.value);
+    }
+    let pending = this.inFlight.get(url);
+    if (!pending) {
+      pending = this.httpClient.sendRequest(HttpMethod.GET, url).finally(() => this.inFlight.delete(url));
+      this.inFlight.set(url, pending);
+    }
+    const value = await pending;
+    if (this.cacheTtlMs > 0) this.cache.set(url, { at: Date.now(), value });
+    return structuredClone(value);
   }
 
   getHttpClient(): HttpClientInterface {
@@ -172,7 +216,7 @@ export class RestGateway implements Gateway {
     if (!url) throw new QueryError('Cannot refresh a model without a resource URL');
     const type = this.requireType(model);
 
-    const response = await this.httpClient.sendRequest(HttpMethod.GET, url);
+    const response = await this.getRecord(url);
     const root = this.getResourceRoot(type);
     if (!(root in response)) {
       throw new QueryError(`Resource ${type} with ID ${model.getResourceId()} could not be retrieved from URL: ${url}`);
@@ -183,7 +227,7 @@ export class RestGateway implements Gateway {
 
   async retrieve<T extends ModelBase = ModelBase>(resourceType: string, id: string | number): Promise<T> {
     const url = this.buildUrl(this.getResource(resourceType), id);
-    const response = await this.httpClient.sendRequest(HttpMethod.GET, url);
+    const response = await this.getRecord(url);
     const root = this.getResourceRoot(resourceType);
     if (!(root in response)) {
       throw new QueryError(`Resource ${resourceType} with ID ${id} could not be retrieved from URL: ${url}`);
@@ -228,10 +272,14 @@ export class RestGateway implements Gateway {
     const root = this.getResourceRoot(type);
 
     const current = this.hydrator.extractArray(model);
-    const previous = this.hydrator.extractArray(await this.retrieve(type, id));
+    // Always diff against the server's current copy, never the cache.
+    const fresh = await this.getRecord(url, true);
+    if (!(root in fresh)) throw new QueryError(`Resource ${type} with ID ${id} could not be retrieved from URL: ${url}`);
+    const previous = this.hydrator.extractArray(this.hydrator.hydrateModel(this.instantiateModel(type), fresh[root]));
     const diff = this.diffRepresentations(current, previous);
     if (Object.keys(diff).length === 0) return model;
 
+    this.clearCache(url);
     const response = await this.httpClient.sendRequest(HttpMethod.PUT, url, { body: { request: { [root]: diff } } });
     if (!(root in response)) throw new QueryError(`API Error: ${JSON.stringify(response)}`);
 
@@ -242,6 +290,7 @@ export class RestGateway implements Gateway {
   async delete(model: ModelBase): Promise<ApiResponse> {
     const url = model.getResourceUrl();
     if (!url) throw new QueryError('Cannot delete a model without a resource URL');
+    this.clearCache(url);
     return this.httpClient.sendRequest(HttpMethod.DELETE, url);
   }
 
